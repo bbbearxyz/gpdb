@@ -1427,6 +1427,19 @@ expand_inherited_rtentry(PlannerInfo *root, RangeTblEntry *rte, Index rti)
 	else
 		lockmode = AccessShareLock;
 
+	/*
+  * When we concurrently execute an UPDATE/DELETE statement and a VACUUM
+  * statement on a partitioned ao table, UPDATE/DELETE statement is likely
+	* to get an out-of-date snapshot after the VACUUM has been processed on 
+	* one of the leaf partition table. So in such scenarios, we need to acquire 
+	* a higher-level lock for an UPDATE/DELETE statement on each leaf partition 
+	* table at an early stage and keep it to InitPlan to avoid tuples being 
+	* concurrently updated.
+	*/
+	if (parent_is_partitioned && rel_has_appendonly_partition(parentOID) && (parse->commandType == CMD_UPDATE || parse->commandType == CMD_DELETE)) {
+		lockmode = ExclusiveLock; 
+	}
+
 	/* Scan for all members of inheritance set, acquire needed locks */
 	inhOIDs = find_all_inheritors(parentOID, lockmode, NULL);
 
@@ -1558,7 +1571,22 @@ expand_inherited_rtentry(PlannerInfo *root, RangeTblEntry *rte, Index rti)
 
 		/* Close child relations, but keep locks */
 		if (childOID != parentOID)
-			heap_close(newrelation, rel_needs_long_lock(childOID) ? NoLock: lockmode);
+		{	
+			/*
+       * Corresponding to acquiring a higher-level lock on each leaf partition table
+       * when we execute an UPDATE/DELETE statement on a partitioned ao table, we 
+			 * should not release the lock on every leaf partition table at this time but 
+			 * keep it to InitPlan.
+       */
+			if (parent_is_partitioned && rel_has_appendonly_partition(parentOID) && parse->commandType == CMD_UPDATE) 
+			{
+				heap_close(newrelation, NoLock);
+			} 
+			else 
+			{
+				heap_close(newrelation, rel_needs_long_lock(childOID) ? NoLock: lockmode);
+			}
+		}
 	}
 
 	heap_close(oldrelation, NoLock);
