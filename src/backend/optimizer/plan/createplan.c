@@ -531,10 +531,10 @@ create_scan_plan(PlannerInfo *root, Path *best_path)
 	 * If plan has a flow node, ensure all entries of hashExpr
 	 * are in the targetlist.
 	 */
-	if (plan->flow && plan->flow->hashExprs)
-	{
-		plan->targetlist = add_to_flat_tlist_junk(plan->targetlist, plan->flow->hashExprs, true /* resjunk */ );
-	}
+	// if (plan->flow && plan->flow->hashExprs)
+	// {
+	// 	plan->targetlist = add_to_flat_tlist_junk(plan->targetlist, plan->flow->hashExprs, true /* resjunk */ );
+	// }
 
 	/*
 	 * If there are any pseudoconstant clauses attached to this node, insert a
